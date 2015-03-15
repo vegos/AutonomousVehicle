@@ -1,5 +1,5 @@
 // +----------------------------------------------------------------------------------+
-// |  Magla Autonomous Vehicle v3.02 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
+// |  Magla Autonomous Vehicle v3.03 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
 // +----------------------------------------------------------------------------------+
 #include <NewPing.h>
 #include <Servo.h>
@@ -10,6 +10,7 @@
 // ------------------------------------------------------------------------------------
 #define HeadServoPin    2       // Head Servo Pin
 #define TailServoPin   A0       // Tail Servo Pin
+#define IRSensorPin    A1       // Infrared Sensor Pin
 // ------------------------------------------------------------------------------------
 // motor A connected between A01 and A02
 // motor B connected between B01 and B02
@@ -51,7 +52,7 @@ volatile boolean Debug = false; // DEBUG (Send informational messages over seria
 // ------------ SETUP ---------------------------------------------------------------------
 void setup()
 {
-  Debug = false;
+  Debug = true;
   pinMode(STBY, OUTPUT);
   pinMode(PWMA, OUTPUT);
   pinMode(AIN1, OUTPUT);
@@ -64,26 +65,11 @@ void setup()
   pinMode(LEFTPin, OUTPUT);
   pinMode(RIGHTPin, OUTPUT);
   pinMode(BUTTON1, INPUT_PULLUP);
-  if (digitalRead(BUTTON1)==LOW)
-  {
-    for (int x=0; x<5; x++)
-    {
-      digitalWrite(LEFTPin, HIGH);
-      digitalWrite(RIGHTPin, HIGH);
-      digitalWrite(LED1Pin, HIGH);
-      digitalWrite(LED2Pin, HIGH);
-      delay(150);
-      digitalWrite(LEFTPin, LOW);
-      digitalWrite(RIGHTPin, LOW);
-      digitalWrite(LED1Pin, LOW);
-      digitalWrite(LED2Pin, LOW);
-      delay(150);
-      Debug = true;
-    }
-  }
+  pinMode(IRSensorPin, INPUT);
   if (Debug)
   {
-     Serial.begin(9600);    
+    delay(5000);
+    Serial.begin(9600);    
   }
   Head.attach(HeadServoPin);
   Head.write(HEADCENTER);
@@ -116,6 +102,12 @@ void setup()
 // ------------ LOOP ----------------------------------------------------------------------
 void loop()
 {     
+  if (HaveWeCrashed())
+  {
+    if (Debug)
+      Serial.println("CRASH! Going back!");
+    Backwards();
+  }
   int Distance = GetDistance();
   if (Distance>MINDISTANCE)
   {
@@ -292,9 +284,18 @@ void Backwards()
   Move(1,MINSPEED,0);
   Move(2,MINSPEED,0);
   while (GetDistance()<MINDISTANCE)
-  {   
+  {
     digitalWrite(LEFTPin,HIGH);
     digitalWrite(RIGHTPin,HIGH);
+  }
+  while ((GetDistance()>=MINDISTANCE) && (HaveWeCrashed()))
+  {
+  }
+  if (GetDistance()<MINDISTANCE)
+  {
+    while (GetDistance()<MINDISTANCE) 
+    { 
+    }
   }
   digitalWrite(LEFTPin,LOW);
   digitalWrite(RIGHTPin,LOW);
@@ -390,4 +391,15 @@ void Led1(byte Status)
 void Led2(byte light)
 {
   analogWrite(LED2Pin, light);
+}
+
+
+
+// ------------ CHECK IR ------------------------------------------------------------------
+boolean HaveWeCrashed()
+{
+  if (digitalRead(IRSensorPin)==HIGH)
+    return true;
+  else
+    return false;
 }
