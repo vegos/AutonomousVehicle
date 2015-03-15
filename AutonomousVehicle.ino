@@ -1,5 +1,5 @@
 // +----------------------------------------------------------------------------------+
-// |  Magla Autonomous Vehicle v3.03 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
+// |  Magla Autonomous Vehicle v3.04 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
 // +----------------------------------------------------------------------------------+
 #include <NewPing.h>
 #include <Servo.h>
@@ -8,9 +8,9 @@
 #define ECHO_PIN        7       // Ultrasonic Sensor Echo Pin
 #define MAX_DISTANCE  250       // Ultrasonic Sensor Maximum Distance (up to 400-500cm)
 // ------------------------------------------------------------------------------------
-#define HeadServoPin    2       // Head Servo Pin
+#define HeadServoPin   A5       // Head Servo Pin
 #define TailServoPin   A0       // Tail Servo Pin
-#define IRSensorPin    A1       // Infrared Sensor Pin
+#define IRSensorPin     2       // Infrared Sensor Pin
 // ------------------------------------------------------------------------------------
 // motor A connected between A01 and A02
 // motor B connected between B01 and B02
@@ -93,8 +93,9 @@ void setup()
   Led2(0);
   digitalWrite(LEFTPin, LOW);
   digitalWrite(RIGHTPin, LOW);
+  attachInterrupt(0, Collision, RISING);
   if (Debug)
-    Serial.println("Started!");
+    Serial.println("Started!");    
 }
 
 
@@ -402,4 +403,22 @@ boolean HaveWeCrashed()
     return true;
   else
     return false;
+}
+
+
+
+// ------------ INTERRUPT - IR DETECTED COLLISION -----------------------------------------
+void Collision()
+{
+  digitalWrite(STBY, HIGH); //disable standby
+  digitalWrite(AIN1, LOW);
+  digitalWrite(AIN2, HIGH);
+  digitalWrite(BIN1, LOW);
+  digitalWrite(BIN2, HIGH);
+  analogWrite(PWMA,MINSPEED);
+  analogWrite(PWMB,MINSPEED);
+  while (digitalRead(IRSensorPin)==HIGH)
+  {
+  }
+  digitalWrite(STBY, LOW);
 }
