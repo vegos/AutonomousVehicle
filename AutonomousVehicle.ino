@@ -1,53 +1,57 @@
 // +----------------------------------------------------------------------------------+
-// |    Magla Autonomous Vehicle v3 - ©2015, Antonis Maglaras (maglaras@gmail.com)    |
+// |  Magla Autonomous Vehicle v3.02 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
 // +----------------------------------------------------------------------------------+
 #include <NewPing.h>
 #include <Servo.h>
 // ------------------------------------------------------------------------------------
-#define TRIGGER_PIN    4        // Ultrasonic Sensor Trigger Pin
-#define ECHO_PIN       7        // Ultrasonic Sensor Echo Pin
+#define TRIGGER_PIN     4       // Ultrasonic Sensor Trigger Pin
+#define ECHO_PIN        7       // Ultrasonic Sensor Echo Pin
 #define MAX_DISTANCE  250       // Ultrasonic Sensor Maximum Distance (up to 400-500cm)
 // ------------------------------------------------------------------------------------
-#define HeadServoPin 2          // Head Servo Pin
-#define TailServoPin A0         // Tail Servo Pin
+#define HeadServoPin    2       // Head Servo Pin
+#define TailServoPin   A0       // Tail Servo Pin
 // ------------------------------------------------------------------------------------
 // motor A connected between A01 and A02
 // motor B connected between B01 and B02
-#define STBY 10                 // Standby
+#define STBY           10       // Standby
 // Motor A
-#define PWMA 6                  // Speed control 
-#define AIN1 9                  // Direction
-#define AIN2 8                  // Direction
+#define PWMA            6       // Speed control 
+#define AIN1            9       // Direction
+#define AIN2            8       // Direction
 // Motor B
-#define PWMB 5                  // Speed control
-#define BIN1 11                 // Direction
-#define BIN2 12                 // Direction
+#define PWMB            5       // Speed control
+#define BIN1           11       // Direction
+#define BIN2           12       // Direction
 // ------------------------------------------------------------------------------------
-#define LED1Pin 13              // Pin for LED #1 (Get Distance)
-#define LED2Pin 3               // Pin for LED #2 (Running)
-#define LEFTPin A3              // Pin for LEFT LED
-#define RIGHTPin A2             // Pin for RIGHT LED
-#define BUTTON1 A4              // Input Button
+#define LED1Pin        13       // Pin for LED #1 (Get Distance)
+#define LED2Pin         3       // Pin for LED #2 (Running)
+#define LEFTPin        A3       // Pin for LEFT LED
+#define RIGHTPin       A2       // Pin for RIGHT LED
+#define BUTTON1        A4       // Input Button
 volatile int Speed;             // Speed Variable
 
 Servo Head;                     // Head (Ultrasonic) Servo
 Servo Tail;                     // Tail Servo
 NewPing Sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 
-#define MAXSPEED    150         // Maximum Speed
-#define MINSPEED     75         // Minimum Speed
-#define MINDISTANCE  50         // Minimum Distance (in cm)
-#define HEADCENTER   93         // Head Servo Center
-#define TAILCENTER   90         // Tail Servo Center
-#define TAILLEFT      0         // EPA - Tail Left
-#define TAILRIGHT   173         // EPA - Tail Right
+#define MAXSPEED      150       // Maximum Speed
+#define MINSPEED       75       // Minimum Speed
+#define MINDISTANCE    50       // Minimum Distance (in cm)
+#define HEADCENTER     93       // Head Servo Center
+#define HEADLEFT      180       // EPA - Head LEft
+#define HEADRIGHT       0       // EPA - Head Right
+#define TAILCENTER     90       // Tail Servo Center
+#define TAILLEFT        0       // EPA - Tail Left
+#define TAILRIGHT     173       // EPA - Tail Right
+
+volatile boolean Debug = false; // DEBUG (Send informational messages over serial/bluetooth serial)
 
 
 
 // ------------ SETUP ---------------------------------------------------------------------
 void setup()
 {
-  Serial.begin(9600);
+  Debug = false;
   pinMode(STBY, OUTPUT);
   pinMode(PWMA, OUTPUT);
   pinMode(AIN1, OUTPUT);
@@ -60,6 +64,27 @@ void setup()
   pinMode(LEFTPin, OUTPUT);
   pinMode(RIGHTPin, OUTPUT);
   pinMode(BUTTON1, INPUT_PULLUP);
+  if (digitalRead(BUTTON1)==LOW)
+  {
+    for (int x=0; x<5; x++)
+    {
+      digitalWrite(LEFTPin, HIGH);
+      digitalWrite(RIGHTPin, HIGH);
+      digitalWrite(LED1Pin, HIGH);
+      digitalWrite(LED2Pin, HIGH);
+      delay(150);
+      digitalWrite(LEFTPin, LOW);
+      digitalWrite(RIGHTPin, LOW);
+      digitalWrite(LED1Pin, LOW);
+      digitalWrite(LED2Pin, LOW);
+      delay(150);
+      Debug = true;
+    }
+  }
+  if (Debug)
+  {
+     Serial.begin(9600);    
+  }
   Head.attach(HeadServoPin);
   Head.write(HEADCENTER);
   Tail.attach(TailServoPin);
@@ -82,6 +107,8 @@ void setup()
   Led2(0);
   digitalWrite(LEFTPin, LOW);
   digitalWrite(RIGHTPin, LOW);
+  if (Debug)
+    Serial.println("Started!");
 }
 
 
@@ -92,11 +119,11 @@ void loop()
   int Distance = GetDistance();
   if (Distance>MINDISTANCE)
   {
-    if (Distance==999)
+    if (Distance==MAX_DISTANCE)
       Speed=MAXSPEED;
-    if ((Distance>=150) && (Distance<999))
+    if ((Distance>=150) && (Distance<MAX_DISTANCE))
       Speed=Speed+10;
-    if ((Distance>=70) && (Distance<150))
+    if ((Distance>=75) && (Distance<150))
       Speed=Speed-10;
     if ((Distance>=MINDISTANCE) && (Distance<70))
       Speed=MINSPEED;
@@ -105,68 +132,89 @@ void loop()
     if (Speed<MINSPEED)
       Speed=MINSPEED;
     int x=0;
-    if (Distance==999)
+    if (Distance==MAX_DISTANCE)
       x=255;
     else
       x=Distance;
     Led2(x-MINDISTANCE);
-    Serial.print("Running - Center Distance: ");
-    Serial.print(Distance);
-    Serial.print(" - Speed: ");
-    Serial.println(Speed);
+    if (Debug)
+    {
+      Serial.print("Running - Center Distance: ");
+      Serial.print(Distance);
+      Serial.print(" - Speed: ");
+      Serial.println(Speed);
+    }
     Go(Speed);
   }
   else
   {
     Led2(255);
-    Serial.print("Stop! - ");
+    if (Debug)
+    {
+      Serial.print("STOPPED! - Center Distance: ");
+      Serial.println(Distance);
+    }
     Speed=0;
     Stop();
-    MoveHead(0);
+    MoveHead(HEADRIGHT);
     delay(300);
     byte Right=GetDistance();
-    Serial.print("Take a look - Right Distance: ");
-    Serial.print(Right);
+    if (Debug)
+    {
+      Serial.print("Taking a look - Right Distance: ");
+      Serial.print(Right);
+    }
     delay(300);
-    MoveHead(180);
+    MoveHead(HEADLEFT);
     delay(350);
     byte Left=GetDistance();
-    Serial.print(" - Left Distance: ");
-    Serial.print(Left);   
+    if (Debug)
+    {
+      Serial.print(" - Left Distance: ");
+      Serial.print(Left);   
+    }
     MoveHead(HEADCENTER);
     delay(300);
     byte Center=GetDistance();
-    Serial.print(" - Center Distance: ");
-    Serial.println(Center);   
+    if (Debug)
+    {
+      Serial.print(" - Center Distance: ");
+      Serial.println(Center);   
+    }
     if (Center>MINDISTANCE)
       return;
     if ((Center<MINDISTANCE) && (Left<MINDISTANCE) && (Right<MINDISTANCE)) 
     {
-      Serial.println("Turning 180 degreess - Less than 50cm");
+      if (Debug)
+        Serial.println("Turning 180 degreess - Less than 50cm");
       Turn180();
       return;
     }
     if ((Left>Right) && (Center<MINDISTANCE))
     {
-      Serial.println("Turning Left");
+      if (Debug)
+        Serial.println("Turning Left");
       TurnLeft();
       return;
     }
     if ((Right>Left) && (Center<MINDISTANCE))
     {
-      Serial.println("Turning Right");
+      if (Debug)
+        Serial.println("Turning Right");
       TurnRight();
       return;
     }
     if ((Left>Right) && (Left>Center))
     {
-      Serial.println("Turning Left");
+      if (Debug)
+        Serial.println("Turning Left");
       TurnLeft();
       return;
     }
     if ((Right>Left) && (Right>Center))
     {
-      Serial.println("Turning Right");
+      if (Debug)
+        Serial.println("Turning Right");
       TurnRight();
       return;
     }
@@ -297,7 +345,7 @@ int GetDistance()
   unsigned int uS = Sonar.ping();
   int apostash = (uS / US_ROUNDTRIP_CM);
   if (apostash == 0)
-    apostash=999;
+    apostash=MAX_DISTANCE;
   Led1(LOW);
   return apostash;
 }
