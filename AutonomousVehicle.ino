@@ -1,5 +1,5 @@
 // +----------------------------------------------------------------------------------+
-// |  Magla Autonomous Vehicle v3.04 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
+// |  Magla Autonomous Vehicle v3.05 -- ©2015, Antonis Maglaras (maglaras@gmail.com)  |
 // +----------------------------------------------------------------------------------+
 #include <NewPing.h>
 #include <Servo.h>
@@ -25,9 +25,10 @@
 #define BIN2           12       // Direction
 // ------------------------------------------------------------------------------------
 #define LED1Pin        13       // Pin for LED #1 (Get Distance)
-#define LED2Pin         3       // Pin for LED #2 (Running)
+#define LED2Pin         3       // Pin for LED #2 (Scanning)
 #define LEFTPin        A3       // Pin for LEFT LED
 #define RIGHTPin       A2       // Pin for RIGHT LED
+#define FWDPin         A1       // Pin for FORWARD LED
 #define BUTTON1        A4       // Input Button
 volatile int Speed;             // Speed Variable
 
@@ -35,11 +36,11 @@ Servo Head;                     // Head (Ultrasonic) Servo
 Servo Tail;                     // Tail Servo
 NewPing Sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 
-#define MAXSPEED      150       // Maximum Speed
+#define MAXSPEED      200       // Maximum Speed
 #define MINSPEED       75       // Minimum Speed
-#define MINDISTANCE    50       // Minimum Distance (in cm)
+#define MINDISTANCE    40       // Minimum Distance (in cm)
 #define HEADCENTER     93       // Head Servo Center
-#define HEADLEFT      180       // EPA - Head LEft
+#define HEADLEFT      180       // EPA - Head Left
 #define HEADRIGHT       0       // EPA - Head Right
 #define TAILCENTER     90       // Tail Servo Center
 #define TAILLEFT        0       // EPA - Tail Left
@@ -52,7 +53,7 @@ volatile boolean Debug = false; // DEBUG (Send informational messages over seria
 // ------------ SETUP ---------------------------------------------------------------------
 void setup()
 {
-  Debug = true;
+  Debug = false;
   pinMode(STBY, OUTPUT);
   pinMode(PWMA, OUTPUT);
   pinMode(AIN1, OUTPUT);
@@ -64,13 +65,9 @@ void setup()
   pinMode(LED2Pin, OUTPUT);
   pinMode(LEFTPin, OUTPUT);
   pinMode(RIGHTPin, OUTPUT);
+  pinMode(FWDPin, OUTPUT);
   pinMode(BUTTON1, INPUT_PULLUP);
   pinMode(IRSensorPin, INPUT);
-  if (Debug)
-  {
-    delay(5000);
-    Serial.begin(9600);    
-  }
   Head.attach(HeadServoPin);
   Head.write(HEADCENTER);
   Tail.attach(TailServoPin);
@@ -78,24 +75,33 @@ void setup()
   Speed = MINSPEED;
   while (digitalRead(BUTTON1)==HIGH)
   { 
+    Led2(LOW);
     Led1(HIGH);
-    Led2(0);
-    digitalWrite(LEFTPin, HIGH);
-    digitalWrite(RIGHTPin, LOW);
-    delay(100);
+    delay(50);
     Led1(LOW);
-    Led2(255);
-    digitalWrite(LEFTPin, LOW);
     digitalWrite(RIGHTPin, HIGH);
-    delay(100);
+    delay(50);
+    digitalWrite(RIGHTPin, LOW);
+    digitalWrite(FWDPin, HIGH);
+    delay(50);
+    digitalWrite(FWDPin, LOW);
+    digitalWrite(LEFTPin, HIGH);
+    delay(50);
+    digitalWrite(LEFTPin, LOW);
+    Led2(255);
+    delay(50);
   }
   Led1(LOW);
   Led2(0);
+  digitalWrite(FWDPin, LOW);
   digitalWrite(LEFTPin, LOW);
   digitalWrite(RIGHTPin, LOW);
   attachInterrupt(0, Collision, RISING);
   if (Debug)
+  {
+    Serial.begin(9600);
     Serial.println("Started!");    
+  }
 }
 
 
@@ -124,12 +130,6 @@ void loop()
       Speed=MAXSPEED;
     if (Speed<MINSPEED)
       Speed=MINSPEED;
-    int x=0;
-    if (Distance==MAX_DISTANCE)
-      x=255;
-    else
-      x=Distance;
-    Led2(x-MINDISTANCE);
     if (Debug)
     {
       Serial.print("Running - Center Distance: ");
@@ -141,7 +141,6 @@ void loop()
   }
   else
   {
-    Led2(255);
     if (Debug)
     {
       Serial.print("STOPPED! - Center Distance: ");
@@ -149,6 +148,7 @@ void loop()
     }
     Speed=0;
     Stop();
+    digitalWrite(RIGHTPin, HIGH);
     MoveHead(HEADRIGHT);
     delay(300);
     byte Right=GetDistance();
@@ -158,6 +158,8 @@ void loop()
       Serial.print(Right);
     }
     delay(300);
+    digitalWrite(RIGHTPin, LOW);
+    digitalWrite(LEFTPin, HIGH);
     MoveHead(HEADLEFT);
     delay(350);
     byte Left=GetDistance();
@@ -166,6 +168,7 @@ void loop()
       Serial.print(" - Left Distance: ");
       Serial.print(Left);   
     }
+    digitalWrite(LEFTPin, LOW);
     MoveHead(HEADCENTER);
     delay(300);
     byte Center=GetDistance();
@@ -273,6 +276,7 @@ void TurnRight()
 // ------------ GO ------------------------------------------------------------------------
 void Go(byte Speed)
 {  
+  digitalWrite(FWDPin, HIGH);
   Move(1,Speed,1);
   Move(2,Speed,1);
 }
@@ -282,6 +286,7 @@ void Go(byte Speed)
 // ------------ GO BACKWARDS --------------------------------------------------------------
 void Backwards()
 {
+  digitalWrite(FWDPin, HIGH);
   Move(1,MINSPEED,0);
   Move(2,MINSPEED,0);
   while (GetDistance()<MINDISTANCE)
@@ -335,6 +340,7 @@ void Stop()
 {
   // enable standby  
   digitalWrite(STBY, LOW); 
+  digitalWrite(FWDPin, LOW);
 }
 
 
@@ -349,6 +355,7 @@ int GetDistance()
   if (apostash == 0)
     apostash=MAX_DISTANCE;
   Led1(LOW);
+  Led2(apostash);
   return apostash;
 }
 
@@ -410,15 +417,22 @@ boolean HaveWeCrashed()
 // ------------ INTERRUPT - IR DETECTED COLLISION -----------------------------------------
 void Collision()
 {
+  digitalWrite(FWDPin, HIGH);
+  digitalWrite(LEFTPin, HIGH);
+  digitalWrite(RIGHTPin, HIGH);
   digitalWrite(STBY, HIGH); //disable standby
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, HIGH);
   digitalWrite(BIN1, LOW);
   digitalWrite(BIN2, HIGH);
-  analogWrite(PWMA,MINSPEED);
-  analogWrite(PWMB,MINSPEED);
+  analogWrite(PWMA,MAXSPEED);
+  analogWrite(PWMB,MAXSPEED);
   while (digitalRead(IRSensorPin)==HIGH)
   {
   }
   digitalWrite(STBY, LOW);
+  digitalWrite(FWDPin, LOW);
+  digitalWrite(LEFTPin, LOW);
+  digitalWrite(RIGHTPin, LOW);
 }
+
